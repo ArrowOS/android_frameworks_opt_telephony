@@ -53,6 +53,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.telephony.euicc.EuiccController;
 import com.android.internal.telephony.uicc.IccRecords;
 import com.android.internal.telephony.uicc.IccUtils;
+import com.android.internal.os.BackgroundThread;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -138,6 +139,11 @@ public class SubscriptionInfoUpdater extends Handler {
         for (int index = 0; index < PROJECT_SIM_NUM; index++) {
             mIsRecordLoaded[index] = false;
         }
+    }
+
+    public SubscriptionInfoUpdater(Context context, Phone[] phone, CommandsInterface[] ci) {
+        this(BackgroundThread.get().getLooper(), context, phone, ci);
+
     }
 
     private void initializeCarrierApps() {
