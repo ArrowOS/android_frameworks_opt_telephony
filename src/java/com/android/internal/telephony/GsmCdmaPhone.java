@@ -2894,6 +2894,11 @@ public class GsmCdmaPhone extends Phone {
         }
     }
 
+    @Override
+    public SIMRecords getSIMRecords() {
+        return mSimRecords;
+    }
+
     private void processIccRecordEvents(int eventCode) {
         switch (eventCode) {
             case IccRecords.EVENT_CFI:
