@@ -231,6 +231,12 @@ public class TelephonyComponentFactory {
         return new SubscriptionInfoUpdater(looper, context, phones, ci);
     }
 
+    public SubscriptionInfoUpdater makeSubscriptionInfoUpdater(Looper looper, Context context,
+            Phone[] phones, CommandsInterface[] ci) {
+        Rlog.d(LOG_TAG, "makeSubscriptionInfoUpdater");
+        return new SubscriptionInfoUpdater(looper, context, phones, ci);
+    }
+
     public void makeExtTelephonyClasses(Context context,
             Phone[] phones, CommandsInterface[] commandsInterfaces) {
         Rlog.d(LOG_TAG, "makeExtTelephonyClasses");
