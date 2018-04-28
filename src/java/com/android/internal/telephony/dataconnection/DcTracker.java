@@ -1216,7 +1216,7 @@ public class DcTracker extends Handler {
         setupDataOnConnectableApns(Phone.REASON_DATA_ATTACHED);
     }
 
-    private boolean isNvSubscription() {
+    protected boolean isNvSubscription() {
         int cdmaSubscriptionSource = CdmaSubscriptionSourceManager.getDefault(mPhone.getContext());
         return cdmaSubscriptionSource == CdmaSubscriptionSourceManager.SUBSCRIPTION_FROM_NV;
     }
