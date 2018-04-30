@@ -157,7 +157,13 @@ public class UiccProfile extends IccCard {
     public final Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
-            if (mDisposed) {
+            // We still need to handle the following response messages even the UiccProfile has been
+            // disposed because whoever sent the request may be still waiting for the response.
+            if (mDisposed && msg.what != EVENT_OPEN_LOGICAL_CHANNEL_DONE
+                    && msg.what != EVENT_CLOSE_LOGICAL_CHANNEL_DONE
+                    && msg.what != EVENT_TRANSMIT_APDU_LOGICAL_CHANNEL_DONE
+                    && msg.what != EVENT_TRANSMIT_APDU_BASIC_CHANNEL_DONE
+                    && msg.what != EVENT_SIM_IO_DONE) {
                 loge("handleMessage: Received " + msg.what
                         + " after dispose(); ignoring the message");
                 return;
@@ -411,14 +417,12 @@ public class UiccProfile extends IccCard {
             setExternalState(IccCardConstants.State.CARD_RESTRICTED);
             return;
         }
-        if (mUiccCard.getCardState() == IccCardStatus.CardState.CARDSTATE_ABSENT) {
-            setExternalState(IccCardConstants.State.ABSENT);
-            return;
-        }
+
         if (mUiccCard instanceof EuiccCard && ((EuiccCard) mUiccCard).getEid() == null) {
             if (DBG) log("EID is not ready yet.");
             return;
         }
+
         // By process of elimination, the UICC Card State = PRESENT and state needs to be decided
         // based on apps
         if (mUiccApplication == null) {
@@ -1461,21 +1465,7 @@ public class UiccProfile extends IccCard {
             return null;
         }
         SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(mContext);
-        String brandName = sp.getString(OPERATOR_BRAND_OVERRIDE_PREFIX + iccId, null);
-        if (brandName == null) {
-            // Check if  CarrierConfig sets carrier name
-            CarrierConfigManager manager = (CarrierConfigManager)
-                    mContext.getSystemService(Context.CARRIER_CONFIG_SERVICE);
-            int subId = SubscriptionController.getInstance().getSubIdUsingPhoneId(mPhoneId);
-            if (manager != null) {
-                PersistableBundle bundle = manager.getConfigForSubId(subId);
-                if (bundle != null && bundle.getBoolean(
-                        CarrierConfigManager.KEY_CARRIER_NAME_OVERRIDE_BOOL)) {
-                    brandName = bundle.getString(CarrierConfigManager.KEY_CARRIER_NAME_STRING);
-                }
-            }
-        }
-        return brandName;
+        return sp.getString(OPERATOR_BRAND_OVERRIDE_PREFIX + iccId, null);
     }
 
     /**

@@ -36,13 +36,13 @@ import android.os.Message;
 import android.os.ResultReceiver;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.Rlog;
+import android.telephony.ims.ImsReasonInfo;
+import android.telephony.ims.ImsSsData;
+import android.telephony.ims.ImsSsInfo;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
 
 import com.android.ims.ImsException;
-import android.telephony.ims.ImsReasonInfo;
-import android.telephony.ims.ImsSsData;
-import android.telephony.ims.ImsSsInfo;
 import com.android.ims.ImsUtInterface;
 import com.android.internal.telephony.CallForwardInfo;
 import com.android.internal.telephony.CallStateException;
@@ -50,7 +50,6 @@ import com.android.internal.telephony.CommandException;
 import com.android.internal.telephony.CommandsInterface;
 import com.android.internal.telephony.MmiCode;
 import com.android.internal.telephony.Phone;
-import com.android.internal.telephony.RILConstants;
 import com.android.internal.telephony.uicc.IccRecords;
 
 import java.util.regex.Matcher;
@@ -801,7 +800,7 @@ public final class ImsPhoneMmiCode extends Handler implements MmiCode {
                 int time = siToTime(mSic);
 
                 if (isInterrogate()) {
-                    mPhone.getCallForwardingOption(reason,
+                    mPhone.getCallForwardingOption(reason, serviceClass,
                             obtainMessage(EVENT_QUERY_CF_COMPLETE, this));
                 } else {
                     int cfAction;
@@ -1091,12 +1090,22 @@ public final class ImsPhoneMmiCode extends Handler implements MmiCode {
                 ar = (AsyncResult) (msg.obj);
 
                 /*
-                * msg.arg1 = 1 means to set unconditional voice call forwarding
-                * msg.arg2 = 1 means to enable voice call forwarding
+                * msg.arg1 = 1 means to set unconditional voice/video call forwarding
+                * msg.arg2 = 1 means to enable voice/video call forwarding
                 */
                 if ((ar.exception == null) && (msg.arg1 == 1)) {
                     boolean cffEnabled = (msg.arg2 == 1);
-                    if (mIccRecords != null) {
+                    /*
+                    * As per 3GPP TS 29002 MAP Specification : Section 17.7.10,
+                    * the BearerServiceCode for "allDataCircuitAsynchronous" is '01010000'.
+                    * Hence, SERVICE_CLASS_DATA_SYNC (1<<4) and SERVICE_CLASS_PACKET (1<<6)
+                    * together make video service class.
+                    */
+                    if(siToServiceClass(mSib) == (SERVICE_CLASS_PACKET
+                                + SERVICE_CLASS_DATA_SYNC)) {
+                        mPhone.setVideoCallForwardingPreference(cffEnabled);
+                        mPhone.notifyCallForwardingIndicator();
+                    } else if (mIccRecords != null) {
                         mPhone.setVoiceCallForwardingFlag(1, cffEnabled, mDialingNumber);
                     }
                 }
@@ -1278,10 +1287,18 @@ public final class ImsPhoneMmiCode extends Handler implements MmiCode {
                 sb.append(mContext.getText(
                         com.android.internal.R.string.serviceEnabled));
             }
+            // Record CLIR setting
+            if (mSc.equals(SC_CLIR)) {
+                mPhone.saveClirSetting(CommandsInterface.CLIR_INVOCATION);
+            }
         } else if (isDeactivate()) {
             mState = State.COMPLETE;
             sb.append(mContext.getText(
                     com.android.internal.R.string.serviceDisabled));
+            // Record CLIR setting
+            if (mSc.equals(SC_CLIR)) {
+                mPhone.saveClirSetting(CommandsInterface.CLIR_SUPPRESSION);
+            }
         } else if (isRegister()) {
             mState = State.COMPLETE;
             sb.append(mContext.getText(
@@ -1472,11 +1489,11 @@ public final class ImsPhoneMmiCode extends Handler implements MmiCode {
                 ssInfo = (ImsSsInfo) ssInfoResp.getParcelable(UT_BUNDLE_KEY_SSINFO);
                 if (ssInfo != null) {
                     Rlog.d(LOG_TAG,
-                            "onSuppSvcQueryComplete: ImsSsInfo mStatus = " + ssInfo.mStatus);
-                    if (ssInfo.mStatus == ImsSsInfo.DISABLED) {
+                            "onSuppSvcQueryComplete: ImsSsInfo mStatus = " + ssInfo.getStatus());
+                    if (ssInfo.getStatus() == ImsSsInfo.DISABLED) {
                         sb.append(mContext.getText(com.android.internal.R.string.serviceDisabled));
                         mState = State.COMPLETE;
-                    } else if (ssInfo.mStatus == ImsSsInfo.ENABLED) {
+                    } else if (ssInfo.getStatus() == ImsSsInfo.ENABLED) {
                         sb.append(mContext.getText(com.android.internal.R.string.serviceEnabled));
                         mState = State.COMPLETE;
                     } else {
@@ -1524,10 +1541,10 @@ public final class ImsPhoneMmiCode extends Handler implements MmiCode {
                 sb.append(mContext.getText(com.android.internal.R.string.serviceDisabled));
             } else {
                 for (int i = 0, s = infos.length; i < s ; i++) {
-                    if (infos[i].mIcbNum !=null) {
-                        sb.append("Num: " + infos[i].mIcbNum + " status: "
-                                + infos[i].mStatus + "\n");
-                    } else if (infos[i].mStatus == 1) {
+                    if (infos[i].getIcbNum() != null) {
+                        sb.append("Num: " + infos[i].getIcbNum() + " status: "
+                                + infos[i].getStatus() + "\n");
+                    } else if (infos[i].getStatus() == 1) {
                         sb.append(mContext.getText(com.android.internal
                                 .R.string.serviceEnabled));
                     } else {
@@ -1718,7 +1735,7 @@ public final class ImsPhoneMmiCode extends Handler implements MmiCode {
     }
 
     void parseSsData(ImsSsData ssData) {
-        ImsException ex = (ssData.result != RILConstants.SUCCESS)
+        ImsException ex = (ssData.result != ImsSsData.RESULT_SUCCESS)
                 ? new ImsException(null, ssData.result) : null;
         mSc = getScStringFromScType(ssData.serviceType);
         mAction = getActionStringFromReqType(ssData.requestType);
@@ -1729,7 +1746,7 @@ public final class ImsPhoneMmiCode extends Handler implements MmiCode {
             case ImsSsData.SS_DEACTIVATION:
             case ImsSsData.SS_REGISTRATION:
             case ImsSsData.SS_ERASURE:
-                if ((ssData.result == RILConstants.SUCCESS)
+                if ((ssData.result == ImsSsData.RESULT_SUCCESS)
                         && ssData.isTypeUnConditional()) {
                     /*
                      * When ssData.serviceType is unconditional (SS_CFU or SS_CF_ALL) and
@@ -1745,35 +1762,44 @@ public final class ImsPhoneMmiCode extends Handler implements MmiCode {
                         Rlog.d(LOG_TAG, "setVoiceCallForwardingFlag done from SS Info.");
                         //Only CF status is set here as part of activation/registration,
                         //number is not available until interrogation.
-                        mPhone.setVoiceCallForwardingFlag(1, cffEnabled, null);
+                        if (ssData.serviceClass == (SERVICE_CLASS_PACKET
+                                    + SERVICE_CLASS_DATA_SYNC)) {
+                            Rlog.d(LOG_TAG, "setVideoCallForwardingFlag done from SS Info.");
+                            mPhone.setVideoCallForwardingPreference(cffEnabled);
+                            mPhone.notifyCallForwardingIndicator();
+                        } else {
+                            Rlog.d(LOG_TAG, "setVoiceCallForwardingFlag done from SS Info.");
+                            mPhone.setVoiceCallForwardingFlag(1, cffEnabled, null);
+                        }
                     } else {
                         Rlog.e(LOG_TAG, "setCallForwardingFlag aborted. sim records is null.");
                     }
                 }
-                onSetComplete(null, new AsyncResult(null, ssData.cfInfo, ex));
+                onSetComplete(null, new AsyncResult(null, ssData.getCallForwardInfo(), ex));
                 break;
             case ImsSsData.SS_INTERROGATION:
                 if (ssData.isTypeClir()) {
                     Rlog.d(LOG_TAG, "CLIR INTERROGATION");
                     Bundle clirInfo = new Bundle();
-                    clirInfo.putIntArray(UT_BUNDLE_KEY_CLIR, ssData.ssInfo);
+                    clirInfo.putIntArray(UT_BUNDLE_KEY_CLIR, ssData.getSuppServiceInfo());
                     onQueryClirComplete(new AsyncResult(null, clirInfo, ex));
                 } else if (ssData.isTypeCF()) {
                     Rlog.d(LOG_TAG, "CALL FORWARD INTERROGATION");
                     onQueryCfComplete(new AsyncResult(null, mPhone
-                            .handleCfQueryResult(ssData.cfInfo), ex));
+                            .handleCfQueryResult(ssData.getCallForwardInfo()), ex));
                 } else if (ssData.isTypeBarring()) {
-                    onSuppSvcQueryComplete(new AsyncResult(null, ssData.ssInfo, ex));
+                    onSuppSvcQueryComplete(new AsyncResult(null, ssData.getSuppServiceInfo(), ex));
                 } else if (ssData.isTypeColr() || ssData.isTypeClip() || ssData.isTypeColp()) {
-                    ImsSsInfo ssInfo = new ImsSsInfo();
-                    ssInfo.mStatus = ssData.ssInfo[0];
+                    int[] suppServiceInfo = ssData.getSuppServiceInfo();
+                    ImsSsInfo ssInfo = new ImsSsInfo(suppServiceInfo[0], null);
                     Bundle clInfo = new Bundle();
                     clInfo.putParcelable(UT_BUNDLE_KEY_SSINFO, ssInfo);
                     onSuppSvcQueryComplete(new AsyncResult(null, clInfo, ex));
                 } else if (ssData.isTypeIcb()) {
-                    onIcbQueryComplete(new AsyncResult(null, ssData.imsSsInfo, ex));
+                    onIcbQueryComplete(new AsyncResult(null, ssData.getImsSpecificSuppServiceInfo(),
+                            ex));
                 } else {
-                    onQueryComplete(new AsyncResult(null, ssData.ssInfo, ex));
+                    onQueryComplete(new AsyncResult(null, ssData.getSuppServiceInfo(), ex));
                 }
                 break;
             default:
