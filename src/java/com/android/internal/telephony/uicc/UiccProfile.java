@@ -98,12 +98,13 @@ public class UiccProfile extends IccCard {
             new UiccCardApplication[IccCardStatus.CARD_MAX_APPS];
     private Context mContext;
     private CommandsInterface mCi;
-    private UiccCard mUiccCard; //parent
+    private final UiccCard mUiccCard; //parent
     private CatService mCatService;
     private UiccCarrierPrivilegeRules mCarrierPrivilegeRules;
     private boolean mDisposed = false;
 
     private RegistrantList mCarrierPrivilegeRegistrants = new RegistrantList();
+    private RegistrantList mOperatorBrandOverrideRegistrants = new RegistrantList();
 
     private final int mPhoneId;
 
@@ -254,18 +255,19 @@ public class UiccProfile extends IccCard {
      * Dispose the UiccProfile.
      */
     public void dispose() {
-        synchronized (mLock) {
-            if (DBG) log("Disposing profile");
+        if (DBG) log("Disposing profile");
 
+        // mUiccCard is outside of mLock in order to prevent deadlocking. This is safe because
+        // EuiccCard#unregisterForEidReady handles its own lock
+        if (mUiccCard instanceof EuiccCard) {
+            ((EuiccCard) mUiccCard).unregisterForEidReady(mHandler);
+        }
+        synchronized (mLock) {
             unregisterAllAppEvents();
             unregisterCurrAppEvents();
 
             InstallCarrierAppUtils.hideAllNotifications(mContext);
             InstallCarrierAppUtils.unregisterPackageInstallReceiver(mContext);
-
-            if (mUiccCard instanceof EuiccCard) {
-                ((EuiccCard) mUiccCard).unregisterForEidReady(mHandler);
-            }
 
             mCi.unregisterForOffOrNotAvailable(mHandler);
             mContext.unregisterReceiver(mReceiver);
@@ -343,6 +345,7 @@ public class UiccProfile extends IccCard {
                 mIccRecords.setServiceProviderName(ccName);
             }
             mTelephonyManager.setSimOperatorNameForPhone(mPhoneId, ccName);
+            mOperatorBrandOverrideRegistrants.notifyRegistrants();
         }
 
         updateCarrierNameForSubscription(subCon, subId);
@@ -858,15 +861,14 @@ public class UiccProfile extends IccCard {
 
     @Override
     public boolean hasIccCard() {
-        synchronized (mLock) {
-            if (mUiccCard != null && mUiccCard.getCardState()
-                    != IccCardStatus.CardState.CARDSTATE_ABSENT) {
-                return true;
-            }
-            loge("hasIccCard: UiccProfile is not null but UiccCard is null or card state is "
-                    + "ABSENT");
-            return false;
+        // mUiccCard is initialized in constructor, so won't be null
+        if (mUiccCard.getCardState()
+                != IccCardStatus.CardState.CARDSTATE_ABSENT) {
+            return true;
         }
+        loge("hasIccCard: UiccProfile is not null but UiccCard is null or card state is "
+                + "ABSENT");
+        return false;
     }
 
     /**
@@ -1024,6 +1026,20 @@ public class UiccProfile extends IccCard {
     }
 
     /**
+     * Registers the handler when operator brand name is overridden.
+     *
+     * @param h Handler for notification message.
+     * @param what User-defined message code.
+     * @param obj User object.
+     */
+    public void registerForOpertorBrandOverride(Handler h, int what, Object obj) {
+        synchronized (mLock) {
+            Registrant r = new Registrant(h, what, obj);
+            mOperatorBrandOverrideRegistrants.add(r);
+        }
+    }
+
+    /**
      * Registers the handler when carrier privilege rules are loaded.
      *
      * @param h Handler for notification message.
@@ -1050,6 +1066,17 @@ public class UiccProfile extends IccCard {
     public void unregisterForCarrierPrivilegeRulesLoaded(Handler h) {
         synchronized (mLock) {
             mCarrierPrivilegeRegistrants.remove(h);
+        }
+    }
+
+    /**
+     * Unregister for notifications when operator brand name is overriden.
+     *
+     * @param h Handler to be removed from the registrant list.
+     */
+    public void unregisterForOperatorBrandOverride(Handler h) {
+        synchronized (mLock) {
+            mOperatorBrandOverrideRegistrants.remove(h);
         }
     }
 
@@ -1453,6 +1480,7 @@ public class UiccProfile extends IccCard {
         } else {
             spEditor.putString(key, brand).commit();
         }
+        mOperatorBrandOverrideRegistrants.notifyRegistrants();
         return true;
     }
 
@@ -1497,6 +1525,15 @@ public class UiccProfile extends IccCard {
     }
 
     /**
+     * Reloads carrier privileges as if a change were just detected.  Useful to force a profile
+     * refresh without having to physically insert or remove a SIM card.
+     */
+    @VisibleForTesting
+    public void refresh() {
+        mHandler.sendMessage(mHandler.obtainMessage(EVENT_CARRIER_PRIVILEGES_LOADED));
+    }
+
+    /**
      * Dump
      */
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
@@ -1506,6 +1543,10 @@ public class UiccProfile extends IccCard {
         for (int i = 0; i < mCarrierPrivilegeRegistrants.size(); i++) {
             pw.println("  mCarrierPrivilegeRegistrants[" + i + "]="
                     + ((Registrant) mCarrierPrivilegeRegistrants.get(i)).getHandler());
+        }
+        for (int i = 0; i < mOperatorBrandOverrideRegistrants.size(); i++) {
+            pw.println("  mOperatorBrandOverrideRegistrants[" + i + "]="
+                    + ((Registrant) mOperatorBrandOverrideRegistrants.get(i)).getHandler());
         }
         pw.println(" mUniversalPinState=" + mUniversalPinState);
         pw.println(" mGsmUmtsSubscriptionAppIndex=" + mGsmUmtsSubscriptionAppIndex);
