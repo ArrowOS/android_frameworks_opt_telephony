@@ -24,7 +24,7 @@ LOCAL_SRC_FILES := $(call all-java-files-under, src/java) \
 	$(call all-Iaidl-files-under, src/java) \
 	$(call all-logtags-files-under, src/java)
 
-LOCAL_JAVA_LIBRARIES := voip-common ims-common services bouncycastle
+LOCAL_JAVA_LIBRARIES := voip-common ims-common telephony-ext services bouncycastle
 LOCAL_STATIC_JAVA_LIBRARIES := \
     telephony-protos \
     android.hardware.radio-V1.0-java \
