@@ -29,6 +29,7 @@ import static com.android.internal.telephony.CommandsInterface.CF_REASON_UNCONDI
 import static com.android.internal.telephony.CommandsInterface.SERVICE_CLASS_VOICE;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
 import android.content.ContentValues;
@@ -240,7 +241,9 @@ public class GsmCdmaPhone extends Phone {
         public void onReceive(Context context, Intent intent) {
             Rlog.d(LOG_TAG, "mBroadcastReceiver: action " + intent.getAction());
             if (intent.getAction().equals(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED) &&
-                    intent.getExtras().getInt(PhoneConstants.PHONE_KEY) == mPhoneId) {
+                    intent.getExtras() != null &&
+                    intent.getExtras().getInt(CarrierConfigManager.EXTRA_SLOT_INDEX,
+                    SubscriptionManager.INVALID_SIM_SLOT_INDEX) == mPhoneId) {
                 sendMessage(obtainMessage(EVENT_CARRIER_CONFIG_CHANGED));
             }
         }
@@ -1551,15 +1554,20 @@ public class GsmCdmaPhone extends Phone {
     }
 
     @Override
+    @Nullable
     public String getSubscriberId() {
-        if (isPhoneTypeGsm()) {
-            IccRecords r = mIccRecords.get();
-            return (r != null) ? r.getIMSI() : null;
-        } else if (isPhoneTypeCdma()) {
-            return mSST.getImsi();
-        } else { //isPhoneTypeCdmaLte()
-            return (mSimRecords != null) ? mSimRecords.getIMSI() : "";
+        String subscriberId = null;
+        if (isPhoneTypeCdma()) {
+            subscriberId = mSST.getImsi();
+        } else {
+            // Both Gsm and CdmaLte get the IMSI from Usim.
+            IccRecords iccRecords = mUiccController.getIccRecords(
+                    mPhoneId, UiccController.APP_FAM_3GPP);
+            if (iccRecords != null) {
+                subscriberId = iccRecords.getIMSI();
+            }
         }
+        return subscriberId;
     }
 
     @Override
@@ -1861,9 +1869,7 @@ public class GsmCdmaPhone extends Phone {
             int serviceClass) {
         if (isPhoneTypeGsm()) {
             Phone imsPhone = mImsPhone;
-            if ((imsPhone != null)
-                    && ((imsPhone.getServiceState().getState() == ServiceState.STATE_IN_SERVICE)
-                    || imsPhone.isUtEnabled())) {
+            if ((imsPhone != null) && imsPhone.isUtEnabled()) {
                 imsPhone.getCallBarring(facility, password, onComplete, serviceClass);
                 return;
             }
@@ -1878,9 +1884,7 @@ public class GsmCdmaPhone extends Phone {
             Message onComplete, int serviceClass) {
         if (isPhoneTypeGsm()) {
             Phone imsPhone = mImsPhone;
-            if ((imsPhone != null)
-                    && ((imsPhone.getServiceState().getState() == ServiceState.STATE_IN_SERVICE)
-                    || imsPhone.isUtEnabled())) {
+            if ((imsPhone != null) && imsPhone.isUtEnabled()) {
                 imsPhone.setCallBarring(facility, lockState, password, onComplete, serviceClass);
                 return;
             }

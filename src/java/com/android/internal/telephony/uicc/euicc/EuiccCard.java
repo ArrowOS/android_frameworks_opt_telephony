@@ -116,8 +116,8 @@ public class EuiccCard extends UiccCard {
     private EuiccSpecVersion mSpecVersion;
     private volatile String mEid;
 
-    public EuiccCard(Context c, CommandsInterface ci, IccCardStatus ics, int phoneId) {
-        super(c, ci, ics, phoneId);
+    public EuiccCard(Context c, CommandsInterface ci, IccCardStatus ics, int phoneId, Object lock) {
+        super(c, ci, ics, phoneId, lock);
         // TODO: Set supportExtendedApdu based on ATR.
         mApduSender = new ApduSender(ci, ISD_R_AID, false /* supportExtendedApdu */);
 
@@ -162,7 +162,12 @@ public class EuiccCard extends UiccCard {
 
             @Override
             public void onException(Throwable e) {
-                // Not notifying registrants if getting eid fails.
+                // Still notifying registrants even getting eid fails.
+                if (mEidReadyRegistrants != null) {
+                    mEidReadyRegistrants.notifyRegistrants(new AsyncResult(null, null, null));
+                }
+                mEid = "";
+                mCardId = "";
                 Rlog.e(LOG_TAG, "Failed loading eid", e);
             }
         };

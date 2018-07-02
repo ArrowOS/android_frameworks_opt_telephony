@@ -2891,6 +2891,14 @@ public class ImsPhoneCallTracker extends CallTracker implements ImsPullCall {
             }
         }
 
+        @Override
+        public void onCallSessionPropertyChanged(ImsCall imsCall, int property) {
+          ImsPhoneConnection conn = findConnection(imsCall);
+            if (conn != null) {
+                conn.onCallSessionPropertyChanged(property);
+            }
+        }
+
         /**
          * Handles a change to the multiparty state for an {@code ImsCall}.  Notifies the associated
          * {@link ImsPhoneConnection} of the change.
@@ -3001,7 +3009,6 @@ public class ImsPhoneCallTracker extends CallTracker implements ImsPullCall {
                 @Override
                 public void onDeregistered(ImsReasonInfo imsReasonInfo) {
                     if (DBG) log("onImsDisconnected imsReasonInfo=" + imsReasonInfo);
-                    resetImsCapabilities();
                     mPhone.setServiceState(ServiceState.STATE_OUT_OF_SERVICE);
                     mPhone.setImsRegistered(false);
                     mPhone.processDisconnectReason(imsReasonInfo);
@@ -4032,7 +4039,7 @@ public class ImsPhoneCallTracker extends CallTracker implements ImsPullCall {
 
     // Update the Rtt attribute
     private ImsCallProfile setRttModeBasedOnOperator(ImsCallProfile profile) {
-        if (!mPhone.canProcessRttReqest()) {
+        if (!(mPhone.isRttSupported() && mPhone.isRttOn())) {
             return profile;
         }
 
@@ -4053,7 +4060,7 @@ public class ImsPhoneCallTracker extends CallTracker implements ImsPullCall {
     private ImsStreamMediaProfile addRttAttributeIfRequired(ImsCall call,
             ImsStreamMediaProfile mediaProfile) {
 
-        if (!mPhone.canProcessRttReqest()) {
+        if (!mPhone.isRttSupported()) {
             return mediaProfile;
         }
 

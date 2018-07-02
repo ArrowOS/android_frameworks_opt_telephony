@@ -32,6 +32,7 @@ import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -61,6 +62,7 @@ import com.android.internal.telephony.test.SimulatedCommands;
 import com.android.internal.telephony.uicc.IccCardApplicationStatus;
 import com.android.internal.telephony.uicc.IccException;
 import com.android.internal.telephony.uicc.IccRecords;
+import com.android.internal.telephony.uicc.UiccController;
 import com.android.internal.telephony.uicc.UiccProfile;
 import com.android.internal.telephony.uicc.UiccSlot;
 
@@ -70,6 +72,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 
 import java.util.List;
 
@@ -155,6 +158,7 @@ public class GsmCdmaPhoneTest extends TelephonyTest {
     @SmallTest
     public void testHandleActionCarrierConfigChanged() {
         Intent intent = new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
+        intent.putExtra(PhoneConstants.PHONE_KEY, mPhoneUT.getPhoneId());
         mContext.sendBroadcast(intent);
         waitForMs(50);
         verify(mSST, times(1)).pollState();
@@ -175,6 +179,57 @@ public class GsmCdmaPhoneTest extends TelephonyTest {
         ServiceState serviceState = new ServiceState();
         mSST.mSS = serviceState;
         assertEquals(serviceState, mPhoneUT.getServiceState());
+    }
+
+    @Test
+    @SmallTest
+    public void testGetSubscriberIdForGsmPhone() {
+        final String subscriberId = "123456789";
+        IccRecords iccRecords = Mockito.mock(IccRecords.class);
+        doReturn(subscriberId).when(iccRecords).getIMSI();
+        doReturn(iccRecords).when(mUiccController)
+                .getIccRecords(anyInt() /* phoneId */, eq(UiccController.APP_FAM_3GPP));
+
+        // Ensure the phone type is GSM
+        GsmCdmaPhone spyPhone = spy(mPhoneUT);
+        doReturn(false).when(spyPhone).isPhoneTypeCdma();
+        doReturn(false).when(spyPhone).isPhoneTypeCdmaLte();
+        doReturn(true).when(spyPhone).isPhoneTypeGsm();
+
+        assertEquals(subscriberId, spyPhone.getSubscriberId());
+    }
+
+    @Test
+    @SmallTest
+    public void testGetSubscriberIdForCdmaLtePhone() {
+        final String subscriberId = "abcdefghijk";
+        IccRecords iccRecords = Mockito.mock(IccRecords.class);
+        doReturn(subscriberId).when(iccRecords).getIMSI();
+        doReturn(iccRecords).when(mUiccController)
+                .getIccRecords(anyInt() /* phoneId */, eq(UiccController.APP_FAM_3GPP));
+
+        // Ensure the phone type is CdmaLte
+        GsmCdmaPhone spyPhone = spy(mPhoneUT);
+        doReturn(false).when(spyPhone).isPhoneTypeCdma();
+        doReturn(true).when(spyPhone).isPhoneTypeCdmaLte();
+        doReturn(false).when(spyPhone).isPhoneTypeGsm();
+
+        assertEquals(subscriberId, spyPhone.getSubscriberId());
+    }
+
+    @Test
+    @SmallTest
+    public void testGetSubscriberIdForCdmaPhone() {
+        final String subscriberId = "987654321";
+        doReturn(subscriberId).when(mSST).getImsi();
+
+        // Ensure the phone type is GSM
+        GsmCdmaPhone spyPhone = spy(mPhoneUT);
+        doReturn(true).when(spyPhone).isPhoneTypeCdma();
+        doReturn(false).when(spyPhone).isPhoneTypeCdmaLte();
+        doReturn(false).when(spyPhone).isPhoneTypeGsm();
+
+        assertEquals(subscriberId, spyPhone.getSubscriberId());
     }
 
     @Test
@@ -510,7 +565,7 @@ public class GsmCdmaPhoneTest extends TelephonyTest {
         doReturn(imsi).when(mSimRecords).getIMSI();
         mPhoneUT.getCallForwardingOption(CF_REASON_UNCONDITIONAL, null);
         verify(mSimulatedCommandsVerifier).queryCallForwardStatus(
-                eq(CF_REASON_UNCONDITIONAL), eq(CommandsInterface.SERVICE_CLASS_VOICE),
+                eq(CF_REASON_UNCONDITIONAL), anyInt(),
                 nullable(String.class), nullable(Message.class));
         waitForMs(50);
         verify(mSimRecords).setVoiceCallForwardingFlag(anyInt(), anyBoolean(),
@@ -806,6 +861,7 @@ public class GsmCdmaPhoneTest extends TelephonyTest {
                 getSubIdUsingPhoneId(anyInt());
         assertEquals(false, mPhoneUT.getCallForwardingIndicator());
 
+        doReturn(true).when(mSubscriptionController).isActiveSubId(anyInt());
         // valid subId, sharedPreference not present
         int subId1 = 0;
         int subId2 = 1;
