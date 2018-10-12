@@ -286,7 +286,7 @@ public class ServiceStateTracker extends Handler {
             int subId = mPhone.getSubId();
             ServiceStateTracker.this.mPrevSubId = mPreviousSubId.get();
             if (mPreviousSubId.getAndSet(subId) != subId) {
-                if (SubscriptionManager.isValidSubscriptionId(subId)) {
+                if (mSubscriptionController.isActiveSubId(subId)) {
                     Context context = mPhone.getContext();
 
                     mPhone.notifyPhoneStateChanged();
@@ -353,7 +353,7 @@ public class ServiceStateTracker extends Handler {
     };
 
     //Common
-    private final GsmCdmaPhone mPhone;
+    protected final GsmCdmaPhone mPhone;
 
     public CellLocation mCellLoc;
     private CellLocation mNewCellLoc;
@@ -593,6 +593,7 @@ public class ServiceStateTracker extends Handler {
         }
 
         mSS = new ServiceState();
+        mSS.setStateOutOfService();
         mNewSS = new ServiceState();
         mLastCellInfoListTime = 0;
         mLastCellInfoList = null;
@@ -1529,7 +1530,7 @@ public class ServiceStateTracker extends Handler {
                 getSystemService(Context.TELEPHONY_SERVICE)).
                 getSimOperatorNumericForPhone(mPhone.getPhoneId());
 
-        if (!TextUtils.isEmpty(operatorNumeric) && getCdmaMin() != null) {
+        if (!TextUtils.isEmpty(operatorNumeric) && !TextUtils.isEmpty(getCdmaMin())) {
             return (operatorNumeric + getCdmaMin());
         } else {
             return null;
@@ -1660,9 +1661,9 @@ public class ServiceStateTracker extends Handler {
         mPollingContext[0]--;
 
         if (mPollingContext[0] == 0) {
+            mNewSS.setEmergencyOnly(mEmergencyOnly);
             if (mPhone.isPhoneTypeGsm()) {
                 updateRoamingState();
-                mNewSS.setEmergencyOnly(mEmergencyOnly);
             } else {
                 boolean namMatch = false;
                 if (!isSidsAllZeros() && isHomeSid(mNewSS.getCdmaSystemId())) {
@@ -1783,7 +1784,8 @@ public class ServiceStateTracker extends Handler {
         return cdmaRoaming && !isSameOperatorNameFromSimAndSS(s);
     }
 
-    void handlePollStateResultMessage(int what, AsyncResult ar) {
+
+    protected void handlePollStateResultMessage(int what, AsyncResult ar) {
         int ints[];
         switch (what) {
             case EVENT_POLL_STATE_REGISTRATION: {
@@ -1804,6 +1806,7 @@ public class ServiceStateTracker extends Handler {
 
                 //Denial reason if registrationState = 3
                 int reasonForDenial = networkRegState.getReasonForDenial();
+                mEmergencyOnly = networkRegState.isEmergencyEnabled();
                 if (mPhone.isPhoneTypeGsm()) {
 
                     mGsmRoaming = regCodeIsRoaming(registrationState);
@@ -1811,7 +1814,6 @@ public class ServiceStateTracker extends Handler {
 
                     boolean isVoiceCapable = mPhone.getContext().getResources()
                             .getBoolean(com.android.internal.R.bool.config_voice_capable);
-                    mEmergencyOnly = networkRegState.isEmergencyEnabled();
                 } else {
                     int roamingIndicator = voiceSpecificStates.roamingIndicator;
 
@@ -2908,6 +2910,12 @@ public class ServiceStateTracker extends Handler {
             }
         }
 
+        if (hasRilVoiceRadioTechnologyChanged || hasRilDataRadioTechnologyChanged) {
+            // Technology has changed, try to fix signal strength type.
+            mSignalStrength.fixType();
+            notifySignalStrength();
+        }
+
         if (hasRegistered) {
             mNetworkAttachedRegistrants.notifyRegistrants();
             mNitzState.handleNetworkAvailable();
@@ -3094,7 +3102,8 @@ public class ServiceStateTracker extends Handler {
             if (!hasBrandOverride && (mCi.getRadioState().isOn()) && (mPhone.isEriFileLoaded()) &&
                     (!ServiceState.isLte(mSS.getRilVoiceRadioTechnology()) ||
                             mPhone.getContext().getResources().getBoolean(com.android.internal.R.
-                                    bool.config_LTE_eri_for_network_name))) {
+                                    bool.config_LTE_eri_for_network_name)) &&
+                                    (!mIsSubscriptionFromRuim)) {
                 // Only when CDMA is in service, ERI will take effect
                 String eriText = mSS.getOperatorAlpha();
                 // Now the Phone sees the new ServiceState so it can get the new ERI text
