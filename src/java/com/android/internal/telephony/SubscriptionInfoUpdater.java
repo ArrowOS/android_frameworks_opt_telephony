@@ -124,6 +124,13 @@ public class SubscriptionInfoUpdater extends Handler {
 
     public SubscriptionInfoUpdater(
             Looper looper, Context context, Phone[] phone, CommandsInterface[] ci) {
+        this(looper, context, phone, ci,
+                IPackageManager.Stub.asInterface(ServiceManager.getService("package")));
+    }
+
+    @VisibleForTesting public SubscriptionInfoUpdater(
+            Looper looper, Context context, Phone[] phone,
+            CommandsInterface[] ci, IPackageManager packageMgr) {
         super(looper);
         logd("Constructor invoked");
 
@@ -131,7 +138,7 @@ public class SubscriptionInfoUpdater extends Handler {
         mPhone = phone;
         mSubscriptionManager = SubscriptionManager.from(mContext);
         mEuiccManager = (EuiccManager) mContext.getSystemService(Context.EUICC_SERVICE);
-        mPackageManager = IPackageManager.Stub.asInterface(ServiceManager.getService("package"));
+        mPackageManager = packageMgr;
 
         mCarrierServiceBindHelper = new CarrierServiceBindHelper(mContext);
         initializeCarrierApps();
