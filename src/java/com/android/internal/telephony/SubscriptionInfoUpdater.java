@@ -417,7 +417,7 @@ public class SubscriptionInfoUpdater extends Handler {
                     if (!TextUtils.isEmpty(simCarrierName)) {
                         nameToSet = simCarrierName;
                     } else {
-                        nameToSet = "CARD " + Integer.toString(slotId + 1);
+                        nameToSet = "SIM " + Integer.toString(slotId + 1);
                     }
                     logd("sim name = " + nameToSet);
                     SubscriptionController.getInstance().setDisplayName(nameToSet, subId);

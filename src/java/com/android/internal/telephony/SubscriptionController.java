@@ -1055,7 +1055,7 @@ public class SubscriptionController extends ISub.Stub {
                 if (!TextUtils.isEmpty(simCarrierName)) {
                     nameToSet = simCarrierName;
                 } else {
-                    nameToSet = "CARD " + Integer.toString(slotIndex + 1);
+                    nameToSet = "SIM " + Integer.toString(slotIndex + 1);
                 }
 
                 ContentValues value = new ContentValues();
