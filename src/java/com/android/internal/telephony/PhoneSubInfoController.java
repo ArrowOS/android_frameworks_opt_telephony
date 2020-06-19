@@ -222,7 +222,7 @@ public class PhoneSubInfoController extends IPhoneSubInfo.Stub {
         if (!SubscriptionManager.isValidPhoneId(phoneId)) {
             phoneId = 0;
         }
-        if (phoneId < 0 || phoneId >= mPhone.length) {
+        if (phoneId < 0 || mPhone.length == 0) {
             log("getPhone, phoneId: " + phoneId +
                 ", mPhone.length: " + mPhone.length + ", should never here!");
             return null;

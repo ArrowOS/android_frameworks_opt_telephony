@@ -468,7 +468,9 @@ public class PhoneSwitcher extends Handler {
                 break;
             }
             case EVENT_REQUEST_NETWORK: {
-                onRequestNetwork((NetworkRequest)msg.obj);
+                if (mNumPhones > 0) {
+                    onRequestNetwork((NetworkRequest)msg.obj);
+                }
                 break;
             }
             case EVENT_RELEASE_NETWORK: {
