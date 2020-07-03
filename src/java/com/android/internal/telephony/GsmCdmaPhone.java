@@ -3220,7 +3220,6 @@ public class GsmCdmaPhone extends Phone {
             }
         }
 
-        reapplyUiccAppsEnablementIfNeeded(ENABLE_UICC_APPS_MAX_RETRIES);
     }
 
     private void processIccRecordEvents(int eventCode) {
@@ -4383,7 +4382,7 @@ public class GsmCdmaPhone extends Phone {
         updateUiTtyMode(ttyMode);
     }
 
-    private void reapplyUiccAppsEnablementIfNeeded(int retries) {
+    protected void reapplyUiccAppsEnablementIfNeeded(int retries) {
         UiccSlot slot = mUiccController.getUiccSlotForPhone(mPhoneId);
 
         // If no card is present or we don't have mUiccApplicationsEnabled yet, do nothing.
