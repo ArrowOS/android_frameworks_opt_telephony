@@ -362,6 +362,7 @@ public class DataConnection extends StateMachine {
         sCmdToString[EVENT_DATA_CONNECTION_METEREDNESS_CHANGED - BASE] =
                 "EVENT_DATA_CONNECTION_METEREDNESS_CHANGED";
         sCmdToString[EVENT_NR_FREQUENCY_CHANGED - BASE] = "EVENT_NR_FREQUENCY_CHANGED";
+        sCmdToString[EVENT_RETRY_CONNECTION - BASE] = "EVENT_RETRY_CONNECTION";
     }
     // Convert cmd to string or null if unknown
     static String cmdToString(int cmd) {
