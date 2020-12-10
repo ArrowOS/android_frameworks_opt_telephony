@@ -35,6 +35,7 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -473,6 +474,16 @@ public class DcTrackerTest extends TelephonyTest {
             mPreferredApnSet = values.getAsInteger(Telephony.Carriers.APN_SET_ID);
             return 1;
         }
+
+        @Override
+        public int delete(Uri uri, String selection, String[] selectionArgs) {
+            return 0;
+        }
+
+        @Override
+        public Uri insert(Uri uri, ContentValues values) {
+            return null;
+        }
     }
 
     @Before
@@ -611,7 +622,7 @@ public class DcTrackerTest extends TelephonyTest {
         assertEquals(apnSetting, mDct.getActiveApnString(PhoneConstants.APN_TYPE_DEFAULT));
         assertArrayEquals(new String[]{PhoneConstants.APN_TYPE_DEFAULT}, mDct.getActiveApnTypes());
 
-        assertEquals(DctConstants.State.CONNECTED, mDct.getOverallState());
+        assertTrue(mDct.isAnyDataConnected());
         assertEquals(DctConstants.State.CONNECTED, mDct.getState(PhoneConstants.APN_TYPE_DEFAULT));
 
         LinkProperties linkProperties = mDct.getLinkProperties(PhoneConstants.APN_TYPE_DEFAULT);
@@ -817,7 +828,7 @@ public class DcTrackerTest extends TelephonyTest {
         verify(mSimulatedCommandsVerifier, times(1)).deactivateDataCall(
                 eq(DataService.REQUEST_REASON_NORMAL), anyInt(),
                 any(Message.class));
-        assertEquals(DctConstants.State.CONNECTED, mDct.getOverallState());
+        assertTrue(mDct.isAnyDataConnected());
         assertEquals(DctConstants.State.IDLE, mDct.getState(PhoneConstants.APN_TYPE_DEFAULT));
         assertEquals(DctConstants.State.CONNECTED, mDct.getState(PhoneConstants.APN_TYPE_IMS));
     }
@@ -928,7 +939,7 @@ public class DcTrackerTest extends TelephonyTest {
         verify(mSimulatedCommandsVerifier, times(1)).deactivateDataCall(
                 eq(DataService.REQUEST_REASON_NORMAL), anyInt(),
                 any(Message.class));
-        assertEquals(DctConstants.State.CONNECTED, mDct.getOverallState());
+        assertTrue(mDct.isAnyDataConnected());
         assertEquals(DctConstants.State.IDLE, mDct.getState(PhoneConstants.APN_TYPE_DEFAULT));
         assertEquals(DctConstants.State.CONNECTED, mDct.getState(PhoneConstants.APN_TYPE_IMS));
 
@@ -966,7 +977,7 @@ public class DcTrackerTest extends TelephonyTest {
                 any(Message.class));
         verifyDataProfile(dpCaptor.getValue(), FAKE_APN3, 2, 64, 0, 0);
 
-        assertEquals(DctConstants.State.CONNECTED, mDct.getOverallState());
+        assertTrue(mDct.isAnyDataConnected());
         assertEquals(DctConstants.State.IDLE, mDct.getState(PhoneConstants.APN_TYPE_DEFAULT));
         assertEquals(DctConstants.State.CONNECTED, mDct.getState(PhoneConstants.APN_TYPE_IMS));
 
@@ -1014,7 +1025,7 @@ public class DcTrackerTest extends TelephonyTest {
                 eq(false), eq(false), eq(DataService.REQUEST_REASON_NORMAL), any(),
                 any(Message.class));
         verifyDataProfile(dpCaptor.getValue(), FAKE_APN1, 0, 5, 1, NETWORK_TYPE_LTE_BITMASK);
-        assertEquals(DctConstants.State.CONNECTED, mDct.getOverallState());
+        assertTrue(mDct.isAnyDataConnected());
 
         AsyncResult ar = new AsyncResult(null,
                 new Pair<>(false, DataEnabledSettings.REASON_DATA_ENABLED_BY_CARRIER), null);
@@ -1027,7 +1038,7 @@ public class DcTrackerTest extends TelephonyTest {
         verify(mSimulatedCommandsVerifier, times(1)).deactivateDataCall(
                 eq(DataService.REQUEST_REASON_NORMAL), anyInt(),
                 any(Message.class));
-        assertEquals(DctConstants.State.CONNECTED, mDct.getOverallState());
+        assertTrue(mDct.isAnyDataConnected());
         assertEquals(DctConstants.State.IDLE, mDct.getState(PhoneConstants.APN_TYPE_DEFAULT));
     }
 
@@ -1297,7 +1308,7 @@ public class DcTrackerTest extends TelephonyTest {
                 eq(false), eq(false), eq(DataService.REQUEST_REASON_NORMAL), any(),
                 any(Message.class));
         verifyDataProfile(dpCaptor.getValue(), FAKE_APN4, 0, 21, 2, NETWORK_TYPE_EHRPD_BITMASK);
-        assertEquals(DctConstants.State.CONNECTED, mDct.getOverallState());
+        assertTrue(mDct.isAnyDataConnected());
 
         //data rat change from ehrpd to lte
         logd("Sending EVENT_DATA_RAT_CHANGED");
@@ -1335,7 +1346,7 @@ public class DcTrackerTest extends TelephonyTest {
                 eq(false), eq(false), eq(DataService.REQUEST_REASON_NORMAL), any(),
                 any(Message.class));
         verifyDataProfile(dpCaptor.getValue(), FAKE_APN1, 0, 21, 1, NETWORK_TYPE_LTE_BITMASK);
-        assertEquals(DctConstants.State.CONNECTED, mDct.getOverallState());
+        assertTrue(mDct.isAnyDataConnected());
     }
 
     // Test for fetchDunApns()
@@ -1409,7 +1420,8 @@ public class DcTrackerTest extends TelephonyTest {
     @SmallTest
     public void testFetchDunApnWhileRoaming() {
         doReturn(true).when(mServiceState).getRoaming();
-        mBundle.putBoolean(CarrierConfigManager.KEY_DISABLE_DUN_APN_WHILE_ROAMING, true);
+        mBundle.putBoolean(CarrierConfigManager
+                .KEY_DISABLE_DUN_APN_WHILE_ROAMING_WITH_PRESET_APN_BOOL, true);
 
         sendInitializationEvents();
 
@@ -1418,8 +1430,15 @@ public class DcTrackerTest extends TelephonyTest {
 
         Settings.Global.putString(mContext.getContentResolver(),
                 Settings.Global.TETHER_DUN_APN, dunApnString);
+
+        DcTracker spyDct = spy(mDct);
+        doReturn(true).when(spyDct).isPreferredApnUserEdited();
+        // Expect non-empty DUN APN list
+        assertEquals(1, spyDct.fetchDunApns().size());
+
+        doReturn(false).when(spyDct).isPreferredApnUserEdited();
         // Expect empty DUN APN list
-        assertEquals(0, mDct.fetchDunApns().size());
+        assertEquals(0, spyDct.fetchDunApns().size());
 
         Settings.Global.putString(mContext.getContentResolver(),
                 Settings.Global.TETHER_DUN_APN, null);
@@ -1505,7 +1524,7 @@ public class DcTrackerTest extends TelephonyTest {
                 eq(false), eq(false), eq(DataService.REQUEST_REASON_NORMAL), any(),
                 any(Message.class));
         verifyDataProfile(dpCaptor.getValue(), FAKE_APN4, 0, 21, 2, NETWORK_TYPE_EHRPD_BITMASK);
-        assertEquals(DctConstants.State.CONNECTED, mDct.getOverallState());
+        assertTrue(mDct.isAnyDataConnected());
 
         // Data rat change from ehrpd to unknown due to OOS
         logd("Sending EVENT_DATA_RAT_CHANGED");
@@ -1537,7 +1556,7 @@ public class DcTrackerTest extends TelephonyTest {
 
         // Verify the same data connection
         assertEquals(FAKE_APN4, mDct.getActiveApnString(PhoneConstants.APN_TYPE_DEFAULT));
-        assertEquals(DctConstants.State.CONNECTED, mDct.getOverallState());
+        assertTrue(mDct.isAnyDataConnected());
     }
 
     // Test provisioning
