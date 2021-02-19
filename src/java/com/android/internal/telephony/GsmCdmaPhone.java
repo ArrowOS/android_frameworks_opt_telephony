@@ -2851,11 +2851,8 @@ public class GsmCdmaPhone extends Phone {
                 }
 
                 if (DBG) logd("Baseband version: " + ar.result);
-
-                String version = (String) ar.result;
-                version = version.substring(0, Math.min(45, version.length()));
                 TelephonyManager.from(mContext).setBasebandVersionForPhone(getPhoneId(),
-                        version);
+                        (String)ar.result);
             break;
 
             case EVENT_GET_IMEI_DONE:
