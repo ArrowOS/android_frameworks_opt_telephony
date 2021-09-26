@@ -253,13 +253,13 @@ public class RIL extends BaseCommands implements CommandsInterface {
     Set<Integer> mDisabledOemHookServices = new HashSet();
 
     /* default work source which will blame phone process */
-    protected WorkSource mRILDefaultWorkSource;
+    private WorkSource mRILDefaultWorkSource;
 
     /* Worksource containing all applications causing wakelock to be held */
     private WorkSource mActiveWakelockWorkSource;
 
     /** Telephony metrics instance for logging metrics event */
-    protected TelephonyMetrics mMetrics = TelephonyMetrics.getInstance();
+    private TelephonyMetrics mMetrics = TelephonyMetrics.getInstance();
     /** Radio bug detector instance */
     private RadioBugDetector mRadioBugDetector = null;
 
@@ -430,7 +430,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
         }
     }
 
-    protected synchronized void resetProxyAndRequestList() {
+    private synchronized void resetProxyAndRequestList() {
         mRadioProxy = null;
         mOemHookProxy = null;
 
@@ -666,9 +666,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
 
         TelephonyManager tm = (TelephonyManager) context.getSystemService(
                 Context.TELEPHONY_SERVICE);
-        boolean noRil = SystemProperties.getBoolean("ro.radio.noril", false);
-        mIsCellularSupported = !noRil &&
-                (tm.isVoiceCapable() || tm.isSmsCapable() || tm.isDataCapable());
+        mIsCellularSupported = tm.isVoiceCapable() || tm.isSmsCapable() || tm.isDataCapable();
 
         mRadioResponse = new RadioResponse(this);
         mRadioIndication = new RadioIndication(this);
@@ -731,20 +729,20 @@ public class RIL extends BaseCommands implements CommandsInterface {
         }
     }
 
-    protected RILRequest obtainRequest(int request, Message result, WorkSource workSource) {
+    private RILRequest obtainRequest(int request, Message result, WorkSource workSource) {
         RILRequest rr = RILRequest.obtain(request, result, workSource);
         addRequest(rr);
         return rr;
     }
 
-    protected RILRequest obtainRequest(int request, Message result, WorkSource workSource,
+    private RILRequest obtainRequest(int request, Message result, WorkSource workSource,
             Object... args) {
         RILRequest rr = RILRequest.obtain(request, result, workSource, args);
         addRequest(rr);
         return rr;
     }
 
-    protected void handleRadioProxyExceptionForRR(RILRequest rr, String caller, Exception e) {
+    private void handleRadioProxyExceptionForRR(RILRequest rr, String caller, Exception e) {
         riljLoge(caller + ": " + e);
         resetProxyAndRequestList();
     }
@@ -3485,7 +3483,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
         }
     }
 
-    protected void constructCdmaSendSmsRilRequest(CdmaSmsMessage msg, byte[] pdu) {
+    private void constructCdmaSendSmsRilRequest(CdmaSmsMessage msg, byte[] pdu) {
         int addrNbrOfDigits;
         int subaddrNbrOfDigits;
         int bearerDataLength;
@@ -5030,7 +5028,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
     }
 
     /** Converts from AccessNetworkType in frameworks to RadioAccessNetworks in HAL. */
-    protected static int convertAntToRan(int accessNetworkType) {
+    private static int convertAntToRan(int accessNetworkType) {
         switch (accessNetworkType) {
             case AccessNetworkType.GERAN:
                 return RadioAccessNetworks.GERAN;
@@ -5544,15 +5542,6 @@ public class RIL extends BaseCommands implements CommandsInterface {
         return rr;
     }
 
-    protected Message getMessageFromRequest(Object request) {
-        RILRequest rr = (RILRequest)request;
-        Message result = null;
-        if (rr != null) {
-                result = rr.mResult;
-        }
-        return result;
-    }
-
     /**
      * This is a helper function to be called at the end of all RadioResponse callbacks.
      * It takes care of sending error response, logging, decrementing wakelock if needed, and
@@ -5605,11 +5594,6 @@ public class RIL extends BaseCommands implements CommandsInterface {
             }
             rr.release();
         }
-    }
-
-    protected void processResponseDone(Object request, RadioResponseInfo responseInfo, Object ret) {
-        RILRequest rr = (RILRequest)request;
-        processResponseDone(rr, responseInfo, ret);
     }
 
     /**
@@ -6015,7 +5999,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
     }
 
     @UnsupportedAppUsage
-    protected static String requestToString(int request) {
+    static String requestToString(int request) {
         switch(request) {
             case RIL_REQUEST_GET_SIM_STATUS:
                 return "GET_SIM_STATUS";
@@ -6330,8 +6314,6 @@ public class RIL extends BaseCommands implements CommandsInterface {
                 return "RIL_REQUEST_GET_BARRING_INFO";
             case RIL_REQUEST_ENTER_SIM_DEPERSONALIZATION:
                 return "RIL_REQUEST_ENTER_SIM_DEPERSONALIZATION";
-            case RIL_REQUEST_GET_ENHANCED_RADIO_CAPABILITY:
-                return "RIL_REQUEST_GET_ENHANCED_RADIO_CAPABILITY";
 
             default: return "<unknown request>";
         }

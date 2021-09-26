@@ -89,7 +89,7 @@ public class TelephonyNetworkFactory extends NetworkFactory {
     public final Handler mInternalHandler;
 
 
-    public TelephonyNetworkFactory(Looper looper, Phone phone, PhoneSwitcher phoneSwitcher) {
+    public TelephonyNetworkFactory(Looper looper, Phone phone) {
         super(looper, phone.getContext(), "TelephonyNetworkFactory[" + phone.getPhoneId()
                 + "]", null);
         mPhone = phone;
@@ -101,7 +101,7 @@ public class TelephonyNetworkFactory extends NetworkFactory {
         setCapabilityFilter(makeNetworkFilter(mSubscriptionController, mPhone.getPhoneId()));
         setScoreFilter(TELEPHONY_NETWORK_SCORE);
 
-        mPhoneSwitcher = phoneSwitcher;
+        mPhoneSwitcher = PhoneSwitcher.getInstance();
         LOG_TAG = "TelephonyNetworkFactory[" + mPhone.getPhoneId() + "]";
 
         mPhoneSwitcher.registerForActivePhoneSwitch(mInternalHandler, EVENT_ACTIVE_PHONE_SWITCH,
@@ -348,7 +348,7 @@ public class TelephonyNetworkFactory extends NetworkFactory {
                 if (dcTracker != null) {
                     DataConnection dc = dcTracker.getDataConnectionByApnType(
                             ApnSetting.getApnTypeString(apnType));
-                    if (dc != null && (dc.isActive() || dc.isActivating())) {
+                    if (dc != null && (dc.isActive())) {
                         Message onCompleteMsg = mInternalHandler.obtainMessage(
                                 EVENT_DATA_HANDOVER_COMPLETED);
                         onCompleteMsg.getData().putParcelable(
