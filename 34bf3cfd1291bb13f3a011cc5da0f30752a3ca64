@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "62d4bd76_c3ec48ca",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 71
+      },
+      "writtenOn": "2022-01-03T02:05:10Z",
+      "side": 1,
+      "message": "Only for pick via gerrit",
+      "revId": "34bf3cfd1291bb13f3a011cc5da0f30752a3ca64",
+      "serverId": "66da7299-18b4-411a-8fa2-12a880778196"
+    }
+  ]
+}
