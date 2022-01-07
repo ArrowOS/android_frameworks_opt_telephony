@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f80cb341_54fb25cf",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 353
+      },
+      "writtenOn": "2022-01-07T15:40:47Z",
+      "side": 1,
+      "message": "Abandoning this patch as we found a cleaner implementation. https://review.arrowos.net/c/ArrowOS/android_frameworks_opt_telephony/+/16149 ",
+      "revId": "04a7c03a177fb03196604454f65a4f684f13fd1f",
+      "serverId": "66da7299-18b4-411a-8fa2-12a880778196"
+    }
+  ]
+}
