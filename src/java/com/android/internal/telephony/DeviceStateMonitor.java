@@ -20,12 +20,16 @@ import static android.app.UiModeManager.PROJECTION_TYPE_AUTOMOTIVE;
 import static android.hardware.radio.V1_0.DeviceStateType.CHARGING_STATE;
 import static android.hardware.radio.V1_0.DeviceStateType.LOW_DATA_EXPECTED;
 import static android.hardware.radio.V1_0.DeviceStateType.POWER_SAVE_MODE;
+import static android.provider.Settings.System.LOW_POWER_DISABLE_5G;
+import static android.telephony.TelephonyManager.ALLOWED_NETWORK_TYPES_REASON_POWER;
+import static android.telephony.TelephonyManager.NETWORK_TYPE_BITMASK_NR;
 
 import android.app.UiModeManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.database.ContentObserver;
 import android.hardware.display.DisplayManager;
 import android.hardware.radio.V1_5.IndicationFilter;
 import android.net.ConnectivityManager;
@@ -33,12 +37,14 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.net.TetheringManager;
+import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Handler;
 import android.os.Message;
 import android.os.PowerManager;
 import android.os.Registrant;
 import android.os.RegistrantList;
+import android.os.UserHandle;
 import android.provider.Settings;
 import android.telephony.AccessNetworkConstants.AccessNetworkType;
 import android.telephony.NetworkRegistrationInfo;
@@ -158,6 +164,9 @@ public class DeviceStateMonitor extends Handler {
      */
     private boolean mIsPowerSaveOn;
 
+    // Whether to disable 5G in battery saver mode.
+    private boolean mDisable5gInPowerSave = true;
+
     /**
      * Low data expected mode. True indicates low data traffic is expected, for example, when the
      * device is idle (e.g. screen is off and not doing tethering in the background). Note this
@@ -262,6 +271,21 @@ public class DeviceStateMonitor extends Handler {
         }
     };
 
+    private final ContentObserver mSettingObserver = new ContentObserver(this) {
+        @Override
+        public void onChange(boolean selfChange, Uri uri) {
+            if (uri.equals(Settings.System.getUriFor(LOW_POWER_DISABLE_5G))) {
+                boolean disable = Settings.System.getIntForUser(
+                        mPhone.getContext().getContentResolver(), LOW_POWER_DISABLE_5G, 1,
+                        UserHandle.USER_CURRENT) == 1;
+                if (mDisable5gInPowerSave != disable) {
+                    mDisable5gInPowerSave = disable;
+                    update5gInPowerSave();
+                }
+            }
+        }
+    };
+
     /**
      * Device state monitor constructor. Note that each phone object should have its own device
      * state monitor, meaning there will be two device monitors on the multi-sim device.
@@ -300,6 +324,10 @@ public class DeviceStateMonitor extends Handler {
         filter.addAction(BatteryManager.ACTION_DISCHARGING);
         filter.addAction(TetheringManager.ACTION_TETHER_STATE_CHANGED);
         mPhone.getContext().registerReceiver(mBroadcastReceiver, filter, null, mPhone);
+
+        mPhone.getContext().getContentResolver().registerContentObserver(
+                Settings.System.getUriFor(LOW_POWER_DISABLE_5G), false, mSettingObserver);
+        update5gInPowerSave();
 
         mPhone.mCi.registerForRilConnected(this, EVENT_RIL_CONNECTED, null);
         mPhone.mCi.registerForAvailable(this, EVENT_RADIO_AVAILABLE, null);
@@ -446,6 +474,23 @@ public class DeviceStateMonitor extends Handler {
         }
     }
 
+    // Optionally disable 5G in battery saver mode.
+    private void update5gInPowerSave() {
+        long allowedNetworkTypes = mPhone.getAllowedNetworkTypes(
+            ALLOWED_NETWORK_TYPES_REASON_POWER);
+        boolean is5gAllowed = (allowedNetworkTypes & NETWORK_TYPE_BITMASK_NR) != 0;
+        boolean shouldDisable = mIsPowerSaveOn && mDisable5gInPowerSave;
+        if (shouldDisable && is5gAllowed) {
+            allowedNetworkTypes &= ~NETWORK_TYPE_BITMASK_NR;
+        } else if (!shouldDisable && !is5gAllowed) {
+            allowedNetworkTypes |= NETWORK_TYPE_BITMASK_NR;
+        } else {
+            return;
+        }
+        mPhone.setAllowedNetworkTypes(ALLOWED_NETWORK_TYPES_REASON_POWER, allowedNetworkTypes,
+                null);
+    }
+
     /**
      * Set if Telephony need always report signal strength.
      *
@@ -501,6 +546,7 @@ public class DeviceStateMonitor extends Handler {
     private void onUpdateDeviceState(int eventType, boolean state) {
         final boolean shouldEnableBarringInfoReportsOld = shouldEnableBarringInfoReports();
         final boolean wasHighPowerEnabled = shouldEnableHighPowerConsumptionIndications();
+
         switch (eventType) {
             case EVENT_SCREEN_STATE_CHANGED:
                 if (mIsScreenOn == state) return;
@@ -524,6 +570,7 @@ public class DeviceStateMonitor extends Handler {
                 if (mIsPowerSaveOn == state) return;
                 mIsPowerSaveOn = state;
                 sendDeviceState(POWER_SAVE_MODE, mIsPowerSaveOn);
+                update5gInPowerSave();
                 break;
             case EVENT_WIFI_CONNECTION_CHANGED:
                 if (mIsWifiConnected == state) return;
