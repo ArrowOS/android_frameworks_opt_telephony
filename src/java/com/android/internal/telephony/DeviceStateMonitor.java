@@ -280,7 +280,7 @@ public class DeviceStateMonitor extends Handler {
                         UserHandle.USER_CURRENT) == 1;
                 if (mDisable5gInPowerSave != disable) {
                     mDisable5gInPowerSave = disable;
-                    update5gInPowerSave();
+                    update5gAllowed();
                 }
             }
         }
@@ -327,7 +327,7 @@ public class DeviceStateMonitor extends Handler {
 
         mPhone.getContext().getContentResolver().registerContentObserver(
                 Settings.System.getUriFor(LOW_POWER_DISABLE_5G), false, mSettingObserver);
-        update5gInPowerSave();
+        update5gAllowed();
 
         mPhone.mCi.registerForRilConnected(this, EVENT_RIL_CONNECTED, null);
         mPhone.mCi.registerForAvailable(this, EVENT_RADIO_AVAILABLE, null);
@@ -474,12 +474,12 @@ public class DeviceStateMonitor extends Handler {
         }
     }
 
-    // Optionally disable 5G in battery saver mode.
-    private void update5gInPowerSave() {
+    // Optionally disable 5G in battery saver mode, or when wifi is connected.
+    private void update5gAllowed() {
         long allowedNetworkTypes = mPhone.getAllowedNetworkTypes(
-            ALLOWED_NETWORK_TYPES_REASON_POWER);
+                ALLOWED_NETWORK_TYPES_REASON_POWER);
         boolean is5gAllowed = (allowedNetworkTypes & NETWORK_TYPE_BITMASK_NR) != 0;
-        boolean shouldDisable = mIsPowerSaveOn && mDisable5gInPowerSave;
+        boolean shouldDisable = (mIsPowerSaveOn && mDisable5gInPowerSave) || mIsWifiConnected;
         if (shouldDisable && is5gAllowed) {
             allowedNetworkTypes &= ~NETWORK_TYPE_BITMASK_NR;
         } else if (!shouldDisable && !is5gAllowed) {
@@ -570,11 +570,12 @@ public class DeviceStateMonitor extends Handler {
                 if (mIsPowerSaveOn == state) return;
                 mIsPowerSaveOn = state;
                 sendDeviceState(POWER_SAVE_MODE, mIsPowerSaveOn);
-                update5gInPowerSave();
+                update5gAllowed();
                 break;
             case EVENT_WIFI_CONNECTION_CHANGED:
                 if (mIsWifiConnected == state) return;
                 mIsWifiConnected = state;
+                update5gAllowed();
                 break;
             case EVENT_UPDATE_ALWAYS_REPORT_SIGNAL_STRENGTH:
                 if (mIsAlwaysSignalStrengthReportingEnabled == state) return;
